@@ -143,6 +143,9 @@
   .history-total{padding:12px;border:1px solid var(--border);background:var(--panel);border-radius:8px;min-width:0}
   .history-total small{color:var(--muted);font-size:11px}
   .history-total strong{display:block;margin-top:5px;font-size:20px}
+  .history-filter{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;background:var(--panel);border:1px solid var(--border);border-radius:8px;margin-bottom:14px}
+  .history-filter button{border:0;border-radius:5px;background:transparent;color:var(--muted);padding:9px 6px;font:inherit;font-size:13px;cursor:pointer}
+  .history-filter button.active{background:var(--accent);color:#111;font-weight:800}
   .history-note{margin:0 0 16px;color:var(--muted);font-size:12px}
   .history-list{display:grid;gap:14px}
   .history-receipt{
@@ -154,7 +157,9 @@
   .history-receipt-head small{display:block;margin-top:4px}
   .history-line{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed #aaa;font-size:13px}
   .history-empty{padding:28px 12px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}
-  .history-actions{padding:15px 18px;border-top:1px solid var(--border)}
+  .history-actions{padding:15px 18px;border-top:1px solid var(--border);display:grid;gap:8px}
+  .action.danger{border-color:#67363a;background:transparent;color:#ff8589}
+  .action.danger:hover{background:rgba(215,25,32,.12)}
   @media(max-width:600px){
     .header-inner{padding:14px 16px;gap:10px}
     .brand{gap:9px;min-width:0}
@@ -253,10 +258,16 @@
         </div>
       </div>
       <p class="history-note">Registro guardado en este navegador.</p>
+      <div class="history-filter" role="group" aria-label="Periodo del historial">
+        <button type="button" data-history-view="day" aria-pressed="false" onclick="setHistoryView('day')">Hoy</button>
+        <button type="button" data-history-view="month" aria-pressed="true" class="active" onclick="setHistoryView('month')">Este mes</button>
+        <button type="button" data-history-view="all" aria-pressed="false" onclick="setHistoryView('all')">Histórico</button>
+      </div>
       <div class="history-list" id="historyList"></div>
     </div>
     <div class="history-actions">
-      <button class="action primary" style="width:100%" onclick="downloadMonthlySummary()">⬇ Descargar resumen del mes</button>
+      <button class="action primary" id="downloadSummaryButton" style="width:100%" onclick="downloadHistorySummary()">⬇ Descargar resumen del periodo</button>
+      <button class="action danger" onclick="resetHistory()">Borrar historial de este navegador</button>
     </div>
   </aside>
 </div>
@@ -326,6 +337,7 @@ let cart = [];
 let activeCategory = "Todas";
 const RECEIPTS_STORAGE_KEY = "mestalla-burnout-receipts-v1";
 let receipts = loadReceipts();
+let historyView = "month";
 
 const euro = n => n.toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 const itemTotal = item => (item.basePrice || 0) + item.price * item.qty;
@@ -467,12 +479,25 @@ function renderHistory(){
   document.getElementById("monthLabel").textContent=`Total mes · ${monthName}`;
   document.getElementById("monthlyTotal").textContent=euro(thisMonth.reduce((sum,receipt)=>sum+receipt.total,0));
   document.getElementById("allTimeTotal").textContent=euro(receipts.reduce((sum,receipt)=>sum+receipt.total,0));
+  const periodName=historyView==="day" ? `hoy · ${now.toLocaleDateString("es-ES")}` : historyView==="month" ? monthName : "histórico completo";
+  const periodReceipts=receipts.filter(receipt=>{
+    const date=new Date(receipt.createdAt);
+    if(historyView==="day")return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth() && date.getDate()===now.getDate();
+    if(historyView==="month")return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth();
+    return true;
+  });
+  document.querySelectorAll("[data-history-view]").forEach(button=>{
+    const active=button.dataset.historyView===historyView;
+    button.classList.toggle("active",active);
+    button.setAttribute("aria-pressed",String(active));
+  });
+  document.getElementById("downloadSummaryButton").textContent=`⬇ Descargar resumen · ${periodName}`;
   const list=document.getElementById("historyList");
-  if(!receipts.length){
-    list.innerHTML='<div class="history-empty">Todavía no hay recibos aceptados.</div>';
+  if(!periodReceipts.length){
+    list.innerHTML=`<div class="history-empty">No hay recibos para ${escapeHTML(periodName)}.</div>`;
     return;
   }
-  list.innerHTML=receipts.map(receipt=>`
+  list.innerHTML=periodReceipts.map(receipt=>`
     <article class="history-receipt">
       <div class="history-receipt-head">
         <strong>MESTALLA BURNOUT</strong>
@@ -497,17 +522,38 @@ function openHistory(){
 function closeHistory(){document.getElementById("historyOverlay").classList.remove("show")}
 function outsideHistoryClose(event){if(event.target.id==="historyOverlay")closeHistory()}
 
-function downloadMonthlySummary(){
+function resetHistory(){
+  if(!receipts.length){alert("El historial ya está vacío.");return;}
+  if(!confirm("¿Borrar todos los recibos y totales de este navegador? Esta acción no se puede deshacer."))return;
+  try{
+    localStorage.removeItem(RECEIPTS_STORAGE_KEY);
+    receipts=[];
+    renderHistory();
+  }catch(error){
+    alert("No se pudo borrar el historial de este navegador.");
+  }
+}
+
+function setHistoryView(view){
+  if(!["day","month","all"].includes(view))return;
+  historyView=view;
+  renderHistory();
+}
+
+function downloadHistorySummary(){
   const now=new Date();
-  const monthName=now.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
-  const monthKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-  const thisMonth=receipts.filter(receipt=>{
+  const periodLabel=historyView==="day" ? `HOY · ${now.toLocaleDateString("es-ES")}` : historyView==="month" ? now.toLocaleDateString("es-ES",{month:"long",year:"numeric"}).toLocaleUpperCase("es-ES") : "HISTÓRICO COMPLETO";
+  const periodKey=historyView==="day" ? `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}` : historyView==="month" ? `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}` : "historico";
+  const periodReceipts=receipts.filter(receipt=>{
     const date=new Date(receipt.createdAt);
-    return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth();
+    if(historyView==="day")return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth() && date.getDate()===now.getDate();
+    if(historyView==="month")return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth();
+    return true;
   });
+  if(!periodReceipts.length){alert("No hay recibos para descargar en este periodo.");return;}
   const canvas=document.createElement("canvas");
   canvas.width=1000;
-  canvas.height=440+thisMonth.length*42;
+  canvas.height=360+periodReceipts.length*42;
   const context=canvas.getContext("2d");
   if(!context){alert("No se pudo crear el resumen.");return;}
   context.fillStyle="#f3f0e8";
@@ -517,27 +563,28 @@ function downloadMonthlySummary(){
   context.font="bold 34px Courier New";
   context.fillText("MESTALLA BURNOUT",canvas.width/2,62);
   context.font="20px Courier New";
-  context.fillText(`RESUMEN · ${monthName.toLocaleUpperCase("es-ES")}`,canvas.width/2,104);
+  context.fillText(`RESUMEN · ${periodLabel}`,canvas.width/2,104);
   context.textAlign="left";
   context.setLineDash([7,6]);
   context.beginPath();context.moveTo(60,132);context.lineTo(940,132);context.strokeStyle="#777";context.stroke();
   context.setLineDash([]);
   context.font="bold 24px Courier New";
-  context.fillText("TOTAL MES",60,178);
+  context.fillText(historyView==="day" ? "TOTAL DEL DÍA" : historyView==="month" ? "TOTAL DEL MES" : "TOTAL HISTÓRICO",60,178);
   context.textAlign="right";
-  context.fillText(euro(thisMonth.reduce((sum,receipt)=>sum+receipt.total,0)),940,178);
+  context.fillText(euro(periodReceipts.reduce((sum,receipt)=>sum+receipt.total,0)),940,178);
   context.textAlign="left";
   context.font="20px Courier New";
-  context.fillText(`Recibos aceptados: ${thisMonth.length}`,60,220);
-  context.fillText(`Total histórico: ${euro(receipts.reduce((sum,receipt)=>sum+receipt.total,0))}`,60,258);
+  context.fillText(`Recibos aceptados: ${periodReceipts.length}`,60,220);
+  if(historyView!=="all")context.fillText(`Total histórico: ${euro(receipts.reduce((sum,receipt)=>sum+receipt.total,0))}`,60,258);
   context.setLineDash([7,6]);
-  context.beginPath();context.moveTo(60,286);context.lineTo(940,286);context.stroke();
+  context.beginPath();context.moveTo(60,historyView==="all" ? 258 : 286);context.lineTo(940,historyView==="all" ? 258 : 286);context.stroke();
   context.setLineDash([]);
   context.font="18px Courier New";
-  thisMonth.forEach((receipt,index)=>{
-    const date=new Date(receipt.createdAt).toLocaleDateString("es-ES");
+  periodReceipts.forEach((receipt,index)=>{
+    const receiptDate=new Date(receipt.createdAt);
+    const date=historyView==="day" ? receiptDate.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}) : receiptDate.toLocaleDateString("es-ES");
     const itemCount=receipt.items.reduce((sum,item)=>sum+item.qty,0);
-    const y=326+index*42;
+    const y=(historyView==="all" ? 298 : 326)+index*42;
     context.textAlign="left";
     context.fillText(`${date} · ${itemCount} concepto(s)`,60,y);
     context.textAlign="right";
@@ -548,7 +595,7 @@ function downloadMonthlySummary(){
     const url=URL.createObjectURL(blob);
     const link=document.createElement("a");
     link.href=url;
-    link.download=`mestalla-resumen-${monthKey}.png`;
+    link.download=`mestalla-resumen-${historyView}-${periodKey}.png`;
     link.click();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
   },"image/png");
