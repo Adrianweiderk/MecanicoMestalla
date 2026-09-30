@@ -48,6 +48,12 @@
     border-radius:12px;padding:11px 15px;font-weight:700;cursor:pointer;
   }
   .cart-button:hover{border-color:var(--accent)}
+  .header-actions{display:flex;flex-direction:column;align-items:stretch;gap:7px}
+  .history-button{
+    border:1px solid var(--border);background:transparent;color:var(--muted);
+    border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer;
+  }
+  .history-button:hover{border-color:var(--accent);color:var(--text)}
   .badge{
     display:inline-grid;place-items:center;margin-left:7px;
     min-width:22px;height:22px;padding:0 6px;border-radius:20px;
@@ -132,13 +138,32 @@
     border:1px solid var(--border);background:var(--panel2);color:white;border-radius:10px;padding:12px;cursor:pointer;font-weight:700;
   }
   .action.primary{background:var(--accent);border-color:var(--accent);color:#111}
+  .history-wrap{padding:18px;overflow:auto;flex:1}
+  .history-totals{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .history-total{padding:12px;border:1px solid var(--border);background:var(--panel);border-radius:8px;min-width:0}
+  .history-total small{color:var(--muted);font-size:11px}
+  .history-total strong{display:block;margin-top:5px;font-size:20px}
+  .history-note{margin:0 0 16px;color:var(--muted);font-size:12px}
+  .history-list{display:grid;gap:14px}
+  .history-receipt{
+    background:#f3f0e8;color:#161616;border-radius:5px;padding:16px;
+    font-family:"Courier New",monospace;box-shadow:0 5px 18px rgba(0,0,0,.16);
+  }
+  .history-receipt-head{text-align:center;border-bottom:1px dashed #777;padding-bottom:10px;margin-bottom:8px}
+  .history-receipt-head strong{font-size:15px}
+  .history-receipt-head small{display:block;margin-top:4px}
+  .history-line{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed #aaa;font-size:13px}
+  .history-empty{padding:28px 12px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}
+  .history-actions{padding:15px 18px;border-top:1px solid var(--border)}
   @media(max-width:600px){
     .header-inner{padding:14px 16px;gap:10px}
     .brand{gap:9px;min-width:0}
     .brand>div:last-child{min-width:0}
     .brand h1{font-size:17px}
     .brand span{font-size:11px}
+    .header-actions{flex:0 0 auto}
     .cart-button{flex:0 0 auto;white-space:nowrap;padding:10px 11px}
+    .history-button{padding:7px 8px;font-size:12px}
     .hero h2{font-size:27px}
     .grid{grid-template-columns:1fr 1fr}
     .card{padding:13px}
@@ -158,7 +183,10 @@
         <span>Servicios y personalizaciones</span>
       </div>
     </div>
-    <button class="cart-button" onclick="openCart()">🛒 Carrito <span class="badge" id="cartCount">0</span></button>
+    <div class="header-actions">
+      <button class="cart-button" onclick="openCart()">🛒 Carrito <span class="badge" id="cartCount">0</span></button>
+      <button class="history-button" onclick="openHistory()">🧾 Historial</button>
+    </div>
   </div>
 </header>
 
@@ -202,7 +230,33 @@
     </div>
     <div class="cart-actions">
       <button class="action" onclick="clearCart()">Vaciar</button>
-      <button class="action primary" onclick="printTicket()">🖨️ Imprimir</button>
+      <button class="action primary" onclick="acceptCart()">✓ Aceptar</button>
+    </div>
+  </aside>
+</div>
+
+<div class="overlay" id="historyOverlay" onclick="outsideHistoryClose(event)">
+  <aside class="cart-panel">
+    <div class="cart-head">
+      <h2>🧾 Historial</h2>
+      <button class="close" onclick="closeHistory()">×</button>
+    </div>
+    <div class="history-wrap">
+      <div class="history-totals">
+        <div class="history-total">
+          <small id="monthLabel">Total mes</small>
+          <strong id="monthlyTotal">0,00 €</strong>
+        </div>
+        <div class="history-total">
+          <small>Total histórico</small>
+          <strong id="allTimeTotal">0,00 €</strong>
+        </div>
+      </div>
+      <p class="history-note">Registro guardado en este navegador.</p>
+      <div class="history-list" id="historyList"></div>
+    </div>
+    <div class="history-actions">
+      <button class="action primary" style="width:100%" onclick="downloadMonthlySummary()">⬇ Descargar resumen del mes</button>
     </div>
   </aside>
 </div>
@@ -270,9 +324,22 @@ const products = [
 
 let cart = [];
 let activeCategory = "Todas";
+const RECEIPTS_STORAGE_KEY = "mestalla-burnout-receipts-v1";
+let receipts = loadReceipts();
 
 const euro = n => n.toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 const itemTotal = item => (item.basePrice || 0) + item.price * item.qty;
+
+function loadReceipts(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(RECEIPTS_STORAGE_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter(receipt =>
+      receipt && typeof receipt.createdAt==="string" && Number.isFinite(Date.parse(receipt.createdAt)) && Number.isFinite(receipt.total) && Array.isArray(receipt.items)
+    ) : [];
+  }catch(error){
+    return [];
+  }
+}
 
 function renderCategories(){
   const cats = ["Todas", ...new Set(products.map(p=>p.cat))];
@@ -360,6 +427,133 @@ function updateCart(){
   document.getElementById("ticketDate").textContent=new Date().toLocaleString("es-ES");
 }
 
+function acceptCart(){
+  if(!cart.length){alert("El carrito está vacío.");return;}
+  const receipt={
+    id:Date.now().toString(),
+    createdAt:new Date().toISOString(),
+    items:cart.map(item=>({
+      id:item.id,
+      name:item.name,
+      price:item.price,
+      basePrice:item.basePrice || 0,
+      qty:item.qty,
+      unit:Boolean(item.unit),
+      lineTotal:itemTotal(item)
+    })),
+    total:cart.reduce((sum,item)=>sum+itemTotal(item),0)
+  };
+  receipts.unshift(receipt);
+  try{
+    localStorage.setItem(RECEIPTS_STORAGE_KEY,JSON.stringify(receipts));
+  }catch(error){
+    receipts.shift();
+    alert("No se pudo guardar el recibo en este navegador.");
+    return;
+  }
+  cart=[];
+  updateCart();
+  closeCart();
+  openHistory();
+}
+
+function renderHistory(){
+  const now=new Date();
+  const thisMonth=receipts.filter(receipt=>{
+    const date=new Date(receipt.createdAt);
+    return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth();
+  });
+  const monthName=now.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+  document.getElementById("monthLabel").textContent=`Total mes · ${monthName}`;
+  document.getElementById("monthlyTotal").textContent=euro(thisMonth.reduce((sum,receipt)=>sum+receipt.total,0));
+  document.getElementById("allTimeTotal").textContent=euro(receipts.reduce((sum,receipt)=>sum+receipt.total,0));
+  const list=document.getElementById("historyList");
+  if(!receipts.length){
+    list.innerHTML='<div class="history-empty">Todavía no hay recibos aceptados.</div>';
+    return;
+  }
+  list.innerHTML=receipts.map(receipt=>`
+    <article class="history-receipt">
+      <div class="history-receipt-head">
+        <strong>MESTALLA BURNOUT</strong>
+        <small>Recibo aceptado</small>
+        <small>${new Date(receipt.createdAt).toLocaleString("es-ES")}</small>
+      </div>
+      ${receipt.items.map(item=>`
+        <div class="history-line">
+          <span>${escapeHTML(item.name)} × ${item.qty}</span>
+          <span>${euro(item.lineTotal ?? ((item.basePrice || 0)+item.price*item.qty))}</span>
+        </div>
+      `).join("")}
+      <div class="ticket-total"><div class="total-row"><span>TOTAL</span><span>${euro(receipt.total)}</span></div></div>
+    </article>
+  `).join("");
+}
+
+function openHistory(){
+  renderHistory();
+  document.getElementById("historyOverlay").classList.add("show");
+}
+function closeHistory(){document.getElementById("historyOverlay").classList.remove("show")}
+function outsideHistoryClose(event){if(event.target.id==="historyOverlay")closeHistory()}
+
+function downloadMonthlySummary(){
+  const now=new Date();
+  const monthName=now.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+  const monthKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  const thisMonth=receipts.filter(receipt=>{
+    const date=new Date(receipt.createdAt);
+    return date.getFullYear()===now.getFullYear() && date.getMonth()===now.getMonth();
+  });
+  const canvas=document.createElement("canvas");
+  canvas.width=1000;
+  canvas.height=440+thisMonth.length*42;
+  const context=canvas.getContext("2d");
+  if(!context){alert("No se pudo crear el resumen.");return;}
+  context.fillStyle="#f3f0e8";
+  context.fillRect(0,0,canvas.width,canvas.height);
+  context.fillStyle="#171717";
+  context.textAlign="center";
+  context.font="bold 34px Courier New";
+  context.fillText("MESTALLA BURNOUT",canvas.width/2,62);
+  context.font="20px Courier New";
+  context.fillText(`RESUMEN · ${monthName.toLocaleUpperCase("es-ES")}`,canvas.width/2,104);
+  context.textAlign="left";
+  context.setLineDash([7,6]);
+  context.beginPath();context.moveTo(60,132);context.lineTo(940,132);context.strokeStyle="#777";context.stroke();
+  context.setLineDash([]);
+  context.font="bold 24px Courier New";
+  context.fillText("TOTAL MES",60,178);
+  context.textAlign="right";
+  context.fillText(euro(thisMonth.reduce((sum,receipt)=>sum+receipt.total,0)),940,178);
+  context.textAlign="left";
+  context.font="20px Courier New";
+  context.fillText(`Recibos aceptados: ${thisMonth.length}`,60,220);
+  context.fillText(`Total histórico: ${euro(receipts.reduce((sum,receipt)=>sum+receipt.total,0))}`,60,258);
+  context.setLineDash([7,6]);
+  context.beginPath();context.moveTo(60,286);context.lineTo(940,286);context.stroke();
+  context.setLineDash([]);
+  context.font="18px Courier New";
+  thisMonth.forEach((receipt,index)=>{
+    const date=new Date(receipt.createdAt).toLocaleDateString("es-ES");
+    const itemCount=receipt.items.reduce((sum,item)=>sum+item.qty,0);
+    const y=326+index*42;
+    context.textAlign="left";
+    context.fillText(`${date} · ${itemCount} concepto(s)`,60,y);
+    context.textAlign="right";
+    context.fillText(euro(receipt.total),940,y);
+  });
+  canvas.toBlob(blob=>{
+    if(!blob){alert("No se pudo descargar el resumen.");return;}
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download=`mestalla-resumen-${monthKey}.png`;
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  },"image/png");
+}
+
 function openCart(){
   document.getElementById("overlay").classList.add("show");
   updateCart();
@@ -368,27 +562,9 @@ function closeCart(){document.getElementById("overlay").classList.remove("show")
 function outsideClose(e){if(e.target.id==="overlay")closeCart()}
 function clearCart(){cart=[];updateCart()}
 
-function printTicket(){
-  if(!cart.length){alert("El carrito está vacío.");return;}
-  const total=cart.reduce((sum,x)=>sum+itemTotal(x),0);
-  const rows=cart.map(x=>`<tr><td>${x.name} × ${x.qty}</td><td>${euro(itemTotal(x))}</td></tr>`).join("");
-  const w=window.open("","_blank","width=500,height=700");
-  w.document.write(`
-  <!doctype html><html><head><title>Presupuesto</title>
-  <style>
-    body{font-family:"Courier New",monospace;padding:25px;color:#111}
-    h2{text-align:center;margin-bottom:5px}p{text-align:center;font-size:12px}
-    hr{border:0;border-top:1px dashed #777;margin:18px 0}
-    table{width:100%;border-collapse:collapse}td{padding:7px 0;border-bottom:1px dashed #aaa}
-    td:last-child{text-align:right}.total{font-size:21px;font-weight:bold;text-align:right;margin-top:20px}
-  </style></head><body>
-  <h2>TALLER MECÁNICO</h2><p>Presupuesto</p><p>${new Date().toLocaleString("es-ES")}</p><hr>
-  <table>${rows}</table><div class="total">TOTAL: ${euro(total)}</div>
-  <script>window.onload=()=>window.print()<\/script>
-  </body></html>`);
-  w.document.close();
+function escapeHTML(value){
+  return String(value).replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
 }
-
 function escapeAttr(s){return s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
 renderCategories();
 render();
