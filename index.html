@@ -246,13 +246,29 @@ const products = [
 
   {id:32, name:"Legalización piezas", price:40, cat:"Otros", unit:true, desc:"Legaliza tus piezas para pasar la ITV"},
   {id:33, name:"Emparejado neumáticos", price:175, cat:"Otros"},
-  {id:34, name:"Pequeños desperfectos chapa y pintura", price:95, cat:"Otros"}
+  {id:34, name:"Pequeños desperfectos chapa y pintura", price:95, cat:"Otros"},
+
+  {id:35, name:"Cambio bujías", basePrice:200, price:56, cat:"Recambios", unit:true, desc:"200 € de servicio + 56 € por bujía"},
+  {id:36, name:"Cambio correa distribución", price:210, cat:"Recambios"},
+  {id:37, name:"Cambio pinzas freno", price:90, cat:"Recambios", unit:true},
+  {id:38, name:"Cambio pastillas de freno", price:95, cat:"Recambios", unit:true},
+  {id:39, name:"Cambio disco de freno", price:167, cat:"Recambios"},
+
+  {id:40, name:"Reparación de rueda en carretera", basePrice:65, price:75, cat:"Servicios de grúa", unit:true, desc:"65 € de servicio + 75 € por neumático"},
+  {id:41, name:"Servicio grúa", price:100, cat:"Servicios de grúa"},
+  {id:42, name:"Servicio grúa grande", price:250, cat:"Servicios de grúa"},
+  {id:43, name:"Servicio grúa con cableado", price:300, cat:"Servicios de grúa"},
+
+  {id:44, name:"Venta aceite motor", price:35, cat:"Venta recambios", unit:true, desc:"Precio por botella"},
+  {id:45, name:"Venta refrigerante", price:32, cat:"Venta recambios", unit:true, desc:"Precio por botella"},
+  {id:46, name:"Venta líquido frenos", price:30, cat:"Venta recambios", unit:true, desc:"Precio por botella"}
 ];
 
 let cart = [];
 let activeCategory = "Todas";
 
 const euro = n => n.toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
+const itemTotal = item => (item.basePrice || 0) + item.price * item.qty;
 
 function renderCategories(){
   const cats = ["Todas", ...new Set(products.map(p=>p.cat))];
@@ -285,7 +301,7 @@ function render(){
       <h4>${p.name}</h4>
       <div class="description">${p.desc || (p.unit ? "Precio por unidad" : "Servicio")}</div>
       <div class="card-bottom">
-        <div class="price">${euro(p.price)} <span class="unit">${p.unit?"/ ud.":""}</span></div>
+        <div class="price">${p.basePrice ? `${euro(p.basePrice)} + ` : ""}${euro(p.price)} <span class="unit">${p.unit?"/ ud.":""}</span></div>
         <button class="add" onclick="addToCart(${p.id})">+ Añadir</button>
       </div>
     </article>
@@ -325,17 +341,17 @@ function updateCart(){
       <div class="ticket-item">
         <div class="ticket-row">
           <span class="ticket-name">${x.name}</span>
-          <span>${euro(x.price*x.qty)}</span>
+          <span>${euro(itemTotal(x))}</span>
         </div>
         <div class="ticket-meta">
-          ${x.qty} ${x.unit?'unidad(es)':'servicio(s)'} · ${euro(x.price)}${x.unit?' / ud.':''}
+          ${x.qty} ${x.unit?'unidad(es)':'servicio(s)'} · ${x.basePrice ? `${euro(x.basePrice)} base + ` : ""}${euro(x.price)}${x.unit?' / ud.':''}
           &nbsp; <button class="remove" onclick="removeOne(${x.id})">−</button>
           <button class="remove" onclick="addOne(${x.id})">+</button>
         </div>
       </div>
     `).join("");
   }
-  const total=cart.reduce((sum,x)=>sum+x.price*x.qty,0);
+  const total=cart.reduce((sum,x)=>sum+itemTotal(x),0);
   document.getElementById("total").textContent=euro(total);
   document.getElementById("ticketDate").textContent=new Date().toLocaleString("es-ES");
 }
@@ -350,8 +366,8 @@ function clearCart(){cart=[];updateCart()}
 
 function printTicket(){
   if(!cart.length){alert("El carrito está vacío.");return;}
-  const total=cart.reduce((sum,x)=>sum+x.price*x.qty,0);
-  const rows=cart.map(x=>`<tr><td>${x.name} × ${x.qty}</td><td>${euro(x.price*x.qty)}</td></tr>`).join("");
+  const total=cart.reduce((sum,x)=>sum+itemTotal(x),0);
+  const rows=cart.map(x=>`<tr><td>${x.name} × ${x.qty}</td><td>${euro(itemTotal(x))}</td></tr>`).join("");
   const w=window.open("","_blank","width=500,height=700");
   w.document.write(`
   <!doctype html><html><head><title>Presupuesto</title>
