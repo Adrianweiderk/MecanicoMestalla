@@ -12,8 +12,8 @@
     --border:#29313a;
     --text:#f4f6f8;
     --muted:#98a2ad;
-    --accent:#ffb000;
-    --accent2:#ff7a00;
+    --accent:#d71920;
+    --accent2:#8f1118;
     --danger:#ff4d4d;
     --green:#39d98a;
   }
@@ -37,11 +37,9 @@
   }
   .brand{display:flex;align-items:center;gap:12px}
   .logo{
-    width:42px;height:42px;border-radius:12px;
-    display:grid;place-items:center;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    color:#111;font-size:22px;font-weight:900;
-    box-shadow:0 0 25px rgba(255,176,0,.2);
+    width:58px;height:58px;flex:0 0 auto;border-radius:50%;
+    object-fit:cover;background:#0b0d10;
+    box-shadow:0 0 0 1px rgba(215,25,32,.6),0 0 20px rgba(215,25,32,.18);
   }
   .brand h1{font-size:20px;margin:0}
   .brand span{font-size:12px;color:var(--muted)}
@@ -67,7 +65,7 @@
     border:1px solid var(--border);border-radius:14px;
     background:var(--panel);color:white;font-size:16px;outline:none;
   }
-  .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,176,0,.08)}
+  .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(215,25,32,.08)}
   .search-icon{position:absolute;left:18px;top:15px;font-size:20px;color:var(--muted)}
   .categories{display:flex;gap:9px;overflow:auto;padding:4px 0 20px}
   .cat{
@@ -97,7 +95,7 @@
     border:0;border-radius:10px;background:var(--accent);color:#111;
     font-weight:850;padding:9px 12px;cursor:pointer;
   }
-  .add:hover{background:#ffc13b}
+  .add:hover{background:#f23940}
   .empty{padding:35px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:14px}
   .overlay{
     display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
@@ -135,6 +133,12 @@
   }
   .action.primary{background:var(--accent);border-color:var(--accent);color:#111}
   @media(max-width:600px){
+    .header-inner{padding:14px 16px;gap:10px}
+    .brand{gap:9px;min-width:0}
+    .brand>div:last-child{min-width:0}
+    .brand h1{font-size:17px}
+    .brand span{font-size:11px}
+    .cart-button{flex:0 0 auto;white-space:nowrap;padding:10px 11px}
     .hero h2{font-size:27px}
     .grid{grid-template-columns:1fr 1fr}
     .card{padding:13px}
@@ -148,7 +152,7 @@
 <header>
   <div class="header-inner">
     <div class="brand">
-      <div class="logo">🔧</div>
+      <img class="logo" src="logomecanico.png" alt="Mestalla Burnout Valencia RP">
       <div>
         <h1>Calculadora del Mecánico</h1>
         <span>Servicios y personalizaciones</span>
@@ -159,6 +163,12 @@
 </header>
 
 <main>
+    .header-inner{padding:14px 16px;gap:10px}
+    .brand{gap:9px;min-width:0}
+    .brand>div:last-child{min-width:0}
+    .brand h1{font-size:17px}
+    .brand span{font-size:11px}
+    .cart-button{flex:0 0 auto;white-space:nowrap;padding:10px 11px}
   <section class="hero">
     <h2>Calcula el precio de tu vehículo</h2>
     <p>Selecciona los servicios que quieras y prepara tu presupuesto.</p>
